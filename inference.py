@@ -56,7 +56,7 @@ def resize_and_encode_image(image, output_size=(300, 300)):
 def predict(video_file, mode, controller_url = "http://0.0.0.0:10000/worker_generate_stream", freq = 5):
     """
     video_file: either a local file or a url
-    mode: "SFX" / "AMBIENCE"
+    mode: "SFX" / "AMBIENCE" / "CAPTION"
     controller_url: 
     freq: frequency of frames extraction from video.
 
@@ -74,21 +74,25 @@ def predict(video_file, mode, controller_url = "http://0.0.0.0:10000/worker_gene
 
     # prompt = f"USER: Here are {number_of_images} frames extracted from a video, in chronological order. Describe what is happening in the video. {image_token_string} </s>ASSISTANT:"
     prompt = f"USER: Here are {number_of_images} frames extracted from a video, in chronological order: {image_token_string}."
-    prompt += "I want you to assist me in designing the best sounds for this video."
-    prompt += "Using your understanding of what is happening in the video, including actions, objects, and scene, answer the following question: "
-    if mode == 'SFX':
-        prompt += "What sound effects would you expect to hear when watching the video? Provide a description suitable for searching in a sound library. </s> ASSISTANT:"
+    if mode == 'CAPTION':
+        prompt += "Describe what is happening in the video. </s> ASSISTANT:"
     else:
-        prompt += "What ambience sounds would you expect to hear when watching the video? Provide a description suitable for searching in a sound library. </s> ASSISTANT:"
+        prompt += "I want you to assist me in desining the best sound for this video. Using your understanding of what is happening in the video, including actions, objects, and scene, answer the following question: "
+        if mode == 'SFX':
+            prompt += "What sound effects would you expect to hear when watching the video? Provide a description suitable for searching in a sound library. </s> ASSISTANT:"
+        else:
+            prompt += "What ambience sounds would you expect to hear when watching the video? Provide a description suitable for searching in a sound library. </s> ASSISTANT:"
 
     data = {
         "prompt": prompt,
         "images": encoded_images,
         "stop": "</s>",
-        "model":"llava-v1.5-13b",
+        "model": "llava-v1.5-13b",
     }
 
-    response = requests.post(controller_url, json=data, stream=True)
+    headers = {"User-Agent": "LLaVA Client"}
+
+    response = requests.post(controller_url, json=data, headers = headers, stream=True)
 
     accumulated_response = []
     try:
@@ -118,7 +122,7 @@ if __name__ == "__main__":
     video_file = 'cyclist.mp4'  # Can also be a url
     controller_url = "http://0.0.0.0:10000/worker_generate_stream"
     freq = 5
-    mode = "SFX"
+    mode = "CAPTION"
 
     answer = predict(video_file, mode, controller_url = controller_url, freq = freq)
     print(answer)
