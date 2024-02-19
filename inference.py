@@ -6,9 +6,11 @@ import requests
 import re
 import cv2 
 
-def read_video(video_path):
+def read_video(video_path, freq):
     """
-    Reads video and capture a frame every 5 seconds
+    Reads video and capture a frame every 5 seconds.
+    video_path: can also be a URL
+    freq: frequency of extracted frames. E.g. if freq = 5, one frame every 5 seconds is extracted
     """
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
@@ -18,7 +20,7 @@ def read_video(video_path):
     # frame rate of the video
     fps = cap.get(cv2.CAP_PROP_FPS)
     # number of frames to skip
-    skip_frames = int(fps * 3)
+    skip_frames = int(fps * freq)
 
     # Extract a frame every 3 secs
     frame_count = 0
@@ -38,6 +40,7 @@ def read_video(video_path):
 
     # Release the video capture object
     cap.release()
+    cv2.destroyAllWindows()
     return extracted_frames
 
 
@@ -49,53 +52,73 @@ def resize_and_encode_image(image, output_size=(300, 300)):
     encoded_string = base64.b64encode(image_bytes).decode('utf-8')
     return encoded_string
 
-frames = read_video('cyclist.mp4')
 
-encoded_images = [resize_and_encode_image(image) for image in frames]
-number_of_images = len(encoded_images)
-print(number_of_images)
+def predict(video_file, mode, controller_url = "http://0.0.0.0:10000/worker_generate_stream", freq = 5):
+    """
+    video_file: either a local file or a url
+    mode: "SFX" / "AMBIENCE"
+    controller_url: 
+    freq: frequency of frames extraction from video.
 
-print("Video loaded. Sending Post Request")
+    TODO: Scene splitting and logic to provide multiple scenes
+    """
+    frames = read_video(video_file, freq)
 
-controller_url = "http://0.0.0.0:10000/worker_generate_stream" 
+    encoded_images = [resize_and_encode_image(image) for image in frames]
+    number_of_images = len(encoded_images)
 
-image_token_string = ""
-for _ in range(number_of_images):
-    image_token_string += "<image> "
 
-# prompt = f"USER: Here are {number_of_images} frames extracted from a video, in chronological order. Describe what is happening in the video. {image_token_string} </s>ASSISTANT:"
-prompt = f"USER: Here are {number_of_images} frames extracted from a video, in chronological order: {image_token_string}."
-prompt += "I want you to assist me in desining the best background music for this video."
-prompt += "Using your understanding of what is happening in the video, including actions, objects, and scene, answer the following question: "
-prompt += "What background sounds or music tracks would you expect to hear? Provide a description suitable for searching in a sound library. </s> ASSISTANT:"
+    image_token_string = ""
+    for _ in range(number_of_images):
+        image_token_string += "<image> "
 
-data = {
-    "prompt": prompt,
-    "images": encoded_images,
-    "stop": "</s>",
-    "model":"llava-v1.5-13b",
-}
+    # prompt = f"USER: Here are {number_of_images} frames extracted from a video, in chronological order. Describe what is happening in the video. {image_token_string} </s>ASSISTANT:"
+    prompt = f"USER: Here are {number_of_images} frames extracted from a video, in chronological order: {image_token_string}."
+    prompt += "I want you to assist me in desining the best background music for this video."
+    prompt += "Using your understanding of what is happening in the video, including actions, objects, and scene, answer the following question: "
+    if mode == 'SFX':
+        prompt += "What sound effects would you expect to hear when watching the video? Provide a description suitable for searching in a sound library. </s> ASSISTANT:"
+    else:
+        prompt += "What ambience sounds would you expect to hear when watching the video? Provide a description suitable for searching in a sound library. </s> ASSISTANT:"
 
-response = requests.post(controller_url, json=data, stream=True)
-print('response received')
+    data = {
+        "prompt": prompt,
+        "images": encoded_images,
+        "stop": "</s>",
+        "model":"llava-v1.5-13b",
+    }
 
-accumulated_response = []
-try:
-    for chunk in response.iter_lines(decode_unicode=True):
-        if chunk:
-            # Directly append chunk without manipulation
-            decoded_chunk = chunk.decode('utf-8').rstrip('\0')
-            accumulated_response.append(decoded_chunk)
-    # Join accumulated chunks and then process as a whole
-    # complete_response = ''.join(accumulated_response).replace('\0', '')  # Removing null characters globally
-    input_string = decoded_chunk.replace('\0','')
-    matches = re.findall(r'\{(.*?)\}', input_string)
+    response = requests.post(controller_url, json=data, stream=True)
 
-    # The last match is the content of the last set of curly brackets
-    last_match = matches[-1] if matches else None
-    print(last_match.strip())
+    accumulated_response = []
+    try:
+        for chunk in response.iter_lines(decode_unicode=True):
+            if chunk:
+                # Directly append chunk without manipulation
+                decoded_chunk = chunk.decode('utf-8').rstrip('\0')
+                accumulated_response.append(decoded_chunk)
+        # Join accumulated chunks and then process as a whole
+        # complete_response = ''.join(accumulated_response).replace('\0', '')  # Removing null characters globally
+        input_string = decoded_chunk.replace('\0','')
+        matches = re.findall(r'\{(.*?)\}', input_string)
 
-except requests.exceptions.ChunkedEncodingError as e:
-    print("Error Reading Stream:", e)
-except json.JSONDecodeError as e:
-    print("Error Decoding JSON:", e)
+        # The last match is the content of the last set of curly brackets
+        last_match = matches[-1].strip() if matches else None
+        final_answer = last_match.split("ASSISTANT:")[1].split("\", \"error_code\"")[0]
+
+        return final_answer
+
+    except requests.exceptions.ChunkedEncodingError as e:
+        print("Error Reading Stream:", e)
+    except json.JSONDecodeError as e:
+        print("Error Decoding JSON:", e)
+
+
+if __name__ == "__main__":
+    video_file = 'cyclist.mp4'  # Can also be a url
+    controller_url = "http://0.0.0.0:10000/worker_generate_stream"
+    freq = 5
+    mode = "SFX"
+
+    answer = predict(video_file, mode, controller_url = controller_url, freq = freq)
+    print(answer)
