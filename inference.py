@@ -74,7 +74,7 @@ def predict(video_file, mode, controller_url = "http://0.0.0.0:10000/worker_gene
 
     # prompt = f"USER: Here are {number_of_images} frames extracted from a video, in chronological order. Describe what is happening in the video. {image_token_string} </s>ASSISTANT:"
     prompt = f"USER: Here are {number_of_images} frames extracted from a video, in chronological order: {image_token_string}."
-    prompt += "I want you to assist me in desining the best background music for this video."
+    prompt += "I want you to assist me in designing the best sounds for this video."
     prompt += "Using your understanding of what is happening in the video, including actions, objects, and scene, answer the following question: "
     if mode == 'SFX':
         prompt += "What sound effects would you expect to hear when watching the video? Provide a description suitable for searching in a sound library. </s> ASSISTANT:"
