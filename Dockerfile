@@ -6,18 +6,38 @@ WORKDIR ${APP_HOME}
 ARG PIP_DISABLE_PIP_VERSION_CHECK=1
 ARG PIP_NO_CACHE_DIR=1
 
-COPY requirements.txt requirements.txt
-
 RUN apt-get update && apt-get install --no-install-recommends -y \
-  # text editor
+  # text editors
   nano \
-  ffmpeg \
-  # cleanup cache etc
+  vim  \
+  # supervisor for running multiple servers
+  supervisor  \
+  # cleanup cache etc to keep image small
   && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
   && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir --upgrade -r requirements.txt
+# the idea is that we can place this Dockerfile anywhere, so let's install remotely
+RUN pip install git+https://github.com/giorgiodemarchi/LLaVa
 
-COPY ./ ./
+# create supervisord configuration file
+RUN echo -e "[supervisord] \n\
+nodaemon=true \n\
+ \n\
+[program:controller] \n\
+command=python -m llava.serve... \n\
+redirect_stderr=true \n\
+autostart=true \n\
+autorestart=true \n\
+\n\
+[program:worker] \n\
+command=python -m llava.serve... \n\
+redirect_stderr=true \n\
+autostart=true \n\
+autorestart=true" > /etc/supervisor/conf.d/supervisord.conf
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8200"]
+# we could also do this with a detached configuration file and copy the file over like so
+#COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+# but it could be very sweet if we have everything in one file
+
+# starts both servers
+CMD ["/usr/bin/supervisord"]
