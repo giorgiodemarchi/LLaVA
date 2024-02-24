@@ -116,7 +116,9 @@ def predict(video_file, mode, controller_url = "http://0.0.0.0:10000/worker_gene
         print("Error Reading Stream:", e)
     except json.JSONDecodeError as e:
         print("Error Decoding JSON:", e)
-
+    except Exception as e:
+        print(e)
+    return "ERROR"
 
 if __name__ == "__main__":
     video_file = 'cyclist.mp4'  # Can also be a url
