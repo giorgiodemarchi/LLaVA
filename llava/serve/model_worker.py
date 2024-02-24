@@ -241,7 +241,12 @@ async def generate_stream(request: Request):
     generator = worker.generate_stream_gate(params)
     background_tasks = BackgroundTasks()
     background_tasks.add_task(partial(release_model_semaphore, fn=worker.send_heart_beat))
-    return StreamingResponse(generator, background=background_tasks)
+    def only_generate_last(input):
+        last_el = None
+        for el in input:
+            last_el = el
+        yield last_el
+    return StreamingResponse(only_generate_last(generator), background=background_tasks)
 
 
 @app.post("/worker_get_status")
