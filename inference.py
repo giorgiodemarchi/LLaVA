@@ -187,7 +187,7 @@ if __name__ == "__main__":
     answer = predict(video_file, mode, controller_url = controller_url, freq = freq)
     print(answer)
 
-    openai_key = "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"
+    openai_key = # INSERT OPENAI KEY
     #openai.api_key = openai_key
 
     client = openai.OpenAI(api_key = openai_key)
